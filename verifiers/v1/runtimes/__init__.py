@@ -19,6 +19,7 @@ from verifiers.v1.runtimes.backends.prime import (
     PrimeBackend,
     PrimeConfig,
     PrimeRuntimeInfo,
+    PrimeVolume,
     set_base_sandbox_labels,
 )
 from verifiers.v1.runtimes.backends.subprocess import (
@@ -114,6 +115,7 @@ __all__ = [
     "PrimeBackend",
     "PrimeConfig",
     "PrimeRuntimeInfo",
+    "PrimeVolume",
     "ProgramResult",
     "Runtime",
     "RuntimeBackend",

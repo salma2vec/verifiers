@@ -18,9 +18,10 @@ from typing import Any, ClassVar, Literal
 from urllib.parse import urlsplit
 
 from prime_sandboxes.models import validate_egress_lists
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
+from pydantic_config import BaseConfig
 
-from verifiers.v1.configs.runtime import NetworkPolicyConfig
+from verifiers.v1.configs.runtime import NetworkPolicyConfig, validate_mounts
 from verifiers.v1.errors import SandboxError
 from verifiers.v1.runtimes.base import (
     BaseRuntimeInfo,
@@ -32,6 +33,7 @@ from verifiers.v1.runtimes.base import (
 from verifiers.v1.runtimes.limiters import creation_limiter
 from verifiers.v1.runtimes.runtime import Runtime
 from verifiers.v1.utils.aio import run_shielded
+from verifiers.v1.utils.artifacts import validate_runtime_mounts
 from verifiers.v1.utils.prime import ensure_prime_auth
 from verifiers.v1.utils.scope import run_scope
 
@@ -112,6 +114,13 @@ def set_base_sandbox_labels(labels: list[str]) -> None:
     BASE_LABELS = list(labels)
 
 
+class PrimeVolume(BaseConfig):
+    """An existing named volume in the Prime SDK client's personal or team scope."""
+
+    name: str = Field(min_length=1)
+    read_only: bool = True
+
+
 class PrimeConfig(NetworkPolicyConfig):
     type: Literal["prime"] = "prime"
     image: str = "python:3.11-slim"
@@ -143,6 +152,15 @@ class PrimeConfig(NetworkPolicyConfig):
     """Pace sandbox creation to this many per minute, enforced run-wide across every
     env-server worker process (None/<= 0 disables it). (Tunnel creation is limited separately
     — see interception.tunnel.prime.tunnel_limiter.)"""
+
+    mounts: dict[str, PrimeVolume] = Field(default_factory=dict)
+    """Guest paths mapped to named Prime volumes. Each VM sees the head at creation;
+    writes stay private until the SDK's `client.volumes.publish(sandbox_id, name)`
+    finishes, before the VM stops. Verifiers never publishes or deletes volumes.
+    Requires an SDK with volume support. Artifact roots must stay outside mounts;
+    mount paths cannot traverse symlinks or be moved. Compose is unsupported."""
+
+    _validate_mounts = field_validator("mounts")(validate_mounts)
 
     @model_validator(mode="after")
     def _validate_egress(self) -> PrimeConfig:
@@ -203,6 +221,10 @@ class PrimeBackend(RuntimeBackend):
     async def start(self) -> None:
         from prime_sandboxes import CreateSandboxRequest
 
+        if self.config.mounts and "volumes" not in CreateSandboxRequest.model_fields:
+            raise RuntimeError(
+                "Prime volume mounts require a prime-sandboxes SDK with volume support"
+            )
         self._client = _lease_client()
         # Map the resources onto prime's API (minutes, split GPU; memory/disk are already
         # GB). gpu_type/region are only sent when set (else provider-chosen).
@@ -223,6 +245,11 @@ class PrimeBackend(RuntimeBackend):
             "gpu_type": gpu_type,
             "region": self.config.region,
         }
+        if self.config.mounts:
+            options["volumes"] = [
+                {"mount_path": target, **mount.model_dump()}
+                for target, mount in self.config.mounts.items()
+            ]
         if self.config.checkpoint:
             source = {"checkpoint_id": self.config.checkpoint}
         else:
@@ -280,6 +307,7 @@ class PrimeBackend(RuntimeBackend):
             await self._client.execute_command(
                 self.info.id, f"mkdir -p {shlex.quote(self.config.workdir)}"
             )
+            await validate_runtime_mounts(self.bind(), [])
         except (
             Exception
         ) as e:  # provisioning failure is one rollout's problem, not the eval's

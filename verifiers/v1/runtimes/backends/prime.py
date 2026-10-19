@@ -115,7 +115,7 @@ def set_base_sandbox_labels(labels: list[str]) -> None:
 
 
 class PrimeVolume(BaseConfig):
-    """An existing named volume in the Prime SDK client's personal or team scope."""
+    """A named volume, created if missing in the SDK client's personal or team scope."""
 
     name: str = Field(min_length=1)
     read_only: bool = True
@@ -154,7 +154,8 @@ class PrimeConfig(NetworkPolicyConfig):
     — see interception.tunnel.prime.tunnel_limiter.)"""
 
     mounts: dict[str, PrimeVolume] = Field(default_factory=dict)
-    """Guest paths mapped to named Prime volumes. Each VM sees the head at creation;
+    """Guest paths mapped to Prime volumes, created if missing before the VM.
+    Each VM sees the volume head at creation;
     writes stay private until the SDK's `client.volumes.publish(sandbox_id, name)`
     finishes, before the VM stops. Verifiers never publishes or deletes volumes.
     Requires an SDK with volume support. Artifact roots must stay outside mounts;
@@ -219,7 +220,7 @@ class PrimeBackend(RuntimeBackend):
         self.lan: tuple[str, list[str]] | None = None
 
     async def start(self) -> None:
-        from prime_sandboxes import CreateSandboxRequest
+        from prime_sandboxes import APIError, CreateSandboxRequest
 
         if self.config.mounts and "volumes" not in CreateSandboxRequest.model_fields:
             raise RuntimeError(
@@ -270,6 +271,15 @@ class PrimeBackend(RuntimeBackend):
                 )
                 or contextlib.nullcontext()
             ):
+                for name in dict.fromkeys(m.name for m in self.config.mounts.values()):
+                    try:
+                        await self._client.volumes.create(name)
+                    except APIError as error:
+                        # Create returns 409 when this scoped name already exists,
+                        # including when another runtime creates it concurrently.
+                        if not str(error).startswith("HTTP 409:"):
+                            raise
+
                 # Shielded through the id capture: a cancel that aborts the POST
                 # mid-flight leaves the platform creating a sandbox this side
                 # never learned the id of — teardown() then cannot delete it

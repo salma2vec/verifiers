@@ -81,6 +81,7 @@ from verifiers.v1.mcp import (
     ToolsetConfig,
 )
 from verifiers.v1.runtimes import (
+    BindMount,
     CustomRuntimeConfig,
     DockerConfig,
     NetworkPolicyConfig,
@@ -319,6 +320,7 @@ __all__ = [  # noqa: RUF022 - grouped by public API area
     "ProgramResult",
     "SubprocessConfig",
     "DockerConfig",
+    "BindMount",
     "CustomRuntimeConfig",
     "NetworkPolicyConfig",
     "PrimeConfig",

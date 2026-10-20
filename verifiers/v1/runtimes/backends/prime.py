@@ -158,7 +158,7 @@ class PrimeConfig(NetworkPolicyConfig):
     Each VM sees the volume head at creation;
     writes stay private until the SDK's `client.volumes.publish(sandbox_id, name)`
     finishes, before the VM stops. Verifiers never publishes or deletes volumes.
-    Requires an SDK with volume support. Artifact roots must stay outside mounts;
+    Artifact roots must stay outside mounts;
     mount paths cannot traverse symlinks or be moved. Compose is unsupported."""
 
     _validate_mounts = field_validator("mounts")(validate_mounts)
@@ -222,10 +222,6 @@ class PrimeBackend(RuntimeBackend):
     async def start(self) -> None:
         from prime_sandboxes import APIError, CreateSandboxRequest
 
-        if self.config.mounts and "volumes" not in CreateSandboxRequest.model_fields:
-            raise RuntimeError(
-                "Prime volume mounts require a prime-sandboxes SDK with volume support"
-            )
         self._client = _lease_client()
         # Map the resources onto prime's API (minutes, split GPU; memory/disk are already
         # GB). gpu_type/region are only sent when set (else provider-chosen).

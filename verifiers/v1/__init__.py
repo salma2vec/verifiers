@@ -54,6 +54,7 @@ from verifiers.v1.errors import (
     EnvError,
     HarnessError,
     InterceptionError,
+    OutageKind,
     ProviderError,
     RolloutError,
     SandboxError,
@@ -62,6 +63,7 @@ from verifiers.v1.errors import (
     ToolsetError,
     TunnelError,
     UnscoredError,
+    outage_kind,
 )
 from verifiers.v1.grading import grade_submission
 from verifiers.v1.graph import MessageNode
@@ -289,6 +291,8 @@ __all__ = [  # noqa: RUF022 - grouped by public API area
     "UnscoredError",
     "InterceptionError",
     "TunnelError",
+    "OutageKind",
+    "outage_kind",
     # clients
     "Client",
     "BaseClientConfig",

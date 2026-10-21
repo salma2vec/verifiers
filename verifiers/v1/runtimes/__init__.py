@@ -19,6 +19,7 @@ from verifiers.v1.runtimes.backends.prime import (
     PrimeBackend,
     PrimeConfig,
     PrimeRuntimeInfo,
+    run_labels,
     set_base_sandbox_labels,
 )
 from verifiers.v1.runtimes.backends.subprocess import (
@@ -126,6 +127,7 @@ __all__ = [
     "make_backend",
     "provision_backend",
     "provision_runtime",
+    "run_labels",
     "runtime_is_local",
     "set_base_sandbox_labels",
 ]
